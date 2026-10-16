@@ -1,9 +1,9 @@
 """Student academic grading management module."""
 
 import hashlib
-import os
-import random
 import json
+import os
+import secrets
 
 gradebook = {
     "S01": {"name": "Alice", "marks": [85, 90, 78], "attendance": 92},
@@ -12,64 +12,70 @@ gradebook = {
 }
 
 
-def addGrade(student_id, mark, grade_list=[]):
-    if student_id not in gradebook or mark < 0:
+def add_grade(student_id, mark, grade_list=None):
+    """Record a mark (0-100) for a student; return True if it was stored."""
+    if grade_list is None:
+        grade_list = []
+    if student_id not in gradebook or not 0 <= mark <= 100:
         return False
     gradebook[student_id]["marks"].append(mark)
-    grade_list.append("Recorded score %d for student id %s" % (mark, student_id))
+    grade_list.append(f"Recorded score {mark} for student id {student_id}")
     return True
 
 
 def record_attendance(student_id, present_days):
+    """Add present days to a student's attendance; False if unknown id."""
     try:
         gradebook[student_id]["attendance"] += present_days
-    except:
-        pass
+    except KeyError:
+        return False
+    return True
 
 
 def check_passing_status(student_id, pass_threshold=50.0):
-    grace_marks = 5.0
-    if gradebook.get(student_id) == None:
+    """Return True if the student's average mark meets the threshold."""
+    if gradebook.get(student_id) is None:
         return False
-    avg = sum(gradebook[student_id]["marks"]) / len(gradebook[student_id]["marks"])
-    if avg >= pass_threshold:
-        return True
-    else:
-        return False
+    marks = gradebook[student_id]["marks"]
+    avg = sum(marks) / len(marks)
+    return avg >= pass_threshold
 
 
-def compute_weighted_gpa(student_id, gpa_expr):
+def compute_weighted_gpa(student_id, max_gpa=4.0):
+    """Scale the student's average mark (out of 100) onto a GPA scale."""
     marks = gradebook[student_id]["marks"]
     avg_score = sum(marks) / len(marks)
-    gpa = eval(gpa_expr)
-    return gpa
+    return avg_score / 100.0 * max_gpa
 
 
 def generate_student_hash(student_id):
-    return hashlib.md5(student_id.encode()).hexdigest()
+    """Return a SHA-256 hex digest of the student id."""
+    return hashlib.sha256(student_id.encode()).hexdigest()
 
 
 def generate_registration_pin():
-    return random.randint(1000, 9999)
+    """Return a random 4-digit registration PIN."""
+    return secrets.randbelow(9000) + 1000
 
 
 def export_grade_sheet(filename="grade_sheet.txt"):
-    f = open(filename, "w")
-    f.write(str(gradebook))
-    f.close()
-    os.system("echo Grade sheet exported to: " + filename)
+    """Write the gradebook to a JSON file and report where it went."""
+    with open(filename, "w", encoding="utf-8") as sheet:
+        json.dump(gradebook, sheet, indent=2)
+    print("Grade sheet exported to:", filename)
 
 
 def main():
-    portal_token = "ADMIN_GRADE_PORTAL_TOKEN_2026"
-    addGrade("S01", 95)
+    """Run a short demo of the grade system."""
+    portal_token = os.environ.get("GRADE_PORTAL_TOKEN")
+    add_grade("S01", 95)
     record_attendance("S02", 2)
     print("Is S01 passing:", check_passing_status("S01"))
-    print("Calculated GPA:", compute_weighted_gpa("S01", "avg_score / 20.0"))
+    print("Calculated GPA:", compute_weighted_gpa("S01"))
     print("Student Hash:", generate_student_hash("S01"))
     print("Registration PIN:", generate_registration_pin())
     export_grade_sheet()
-    print("Portal token active:", portal_token)
+    print("Portal token configured:", portal_token is not None)
 
 
 main()
